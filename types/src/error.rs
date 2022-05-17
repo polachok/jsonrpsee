@@ -26,58 +26,82 @@
 
 use std::fmt;
 
-use crate::params::{Id, TwoPointZero};
-use serde::de::Deserializer;
-use serde::ser::Serializer;
-use serde::{Deserialize, Serialize};
+use crate::params::{
+    Id,
+    TwoPointZero,
+};
+use serde::{
+    de::Deserializer,
+    ser::Serializer,
+    Deserialize,
+    Serialize,
+};
 use serde_json::value::RawValue;
-use std::borrow::Borrow;
-use std::borrow::Cow as StdCow;
+use std::borrow::{
+    Borrow,
+    Cow as StdCow,
+};
 use thiserror::Error;
 
 /// [Failed JSON-RPC response object](https://www.jsonrpc.org/specification#response_object).
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ErrorResponse<'a> {
-	/// JSON-RPC version.
-	jsonrpc: TwoPointZero,
-	/// Error.
-	#[serde(borrow)]
-	error: ErrorObject<'a>,
-	/// Request ID
-	id: Id<'a>,
+    /// JSON-RPC version.
+    jsonrpc: TwoPointZero,
+    /// Error.
+    #[serde(borrow)]
+    error: ErrorObject<'a>,
+    /// Request ID
+    id: Id<'a>,
 }
 
 impl<'a> ErrorResponse<'a> {
-	/// Create a borrowed `ErrorResponse`.
-	pub fn borrowed(error: ErrorObject<'a>, id: Id<'a>) -> Self {
-		Self { jsonrpc: TwoPointZero, error, id }
-	}
+    /// Create a borrowed `ErrorResponse`.
+    pub fn borrowed(error: ErrorObject<'a>, id: Id<'a>) -> Self {
+        Self {
+            jsonrpc: TwoPointZero,
+            error,
+            id,
+        }
+    }
 
-	/// Create a borrowed `ErrorResponse`.
-	pub fn owned(error: ErrorObject<'static>, id: Id<'static>) -> Self {
-		Self { jsonrpc: TwoPointZero, error, id }
-	}
+    /// Create a borrowed `ErrorResponse`.
+    pub fn owned(error: ErrorObject<'static>, id: Id<'static>) -> Self {
+        Self {
+            jsonrpc: TwoPointZero,
+            error,
+            id,
+        }
+    }
 
-	/// Take ownership of the parameters within, if we haven't already.
-	pub fn into_owned(self) -> ErrorResponse<'static> {
-		ErrorResponse { jsonrpc: self.jsonrpc, error: self.error.into_owned(), id: self.id.into_owned() }
-	}
+    /// Take ownership of the parameters within, if we haven't already.
+    pub fn into_owned(self) -> ErrorResponse<'static> {
+        ErrorResponse {
+            jsonrpc: self.jsonrpc,
+            error: self.error.into_owned(),
+            id: self.id.into_owned(),
+        }
+    }
 
-	/// Get the [`ErrorObject`] of the error response.
-	pub fn error_object(&self) -> &ErrorObject {
-		&self.error
-	}
+    /// Get the [`ErrorObject`] of the error response.
+    pub fn error_object(&self) -> &ErrorObject {
+        &self.error
+    }
 
-	/// Get the [`Id`] of the error response.
-	pub fn id(&self) -> &Id {
-		&self.id
-	}
+    /// Get the [`Id`] of the error response.
+    pub fn id(&self) -> &Id {
+        &self.id
+    }
 }
 
 impl<'a> fmt::Display for ErrorResponse<'a> {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", serde_json::to_string(&self).expect("infallible; qed"))
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            serde_json::to_string(&self).expect("infallible; qed")
+        )
+    }
 }
 
 /// Owned variant of [`ErrorObject`].
@@ -87,73 +111,93 @@ pub type ErrorObjectOwned = ErrorObject<'static>;
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ErrorObject<'a> {
-	/// Code
-	code: ErrorCode,
-	/// Message
-	message: StdCow<'a, str>,
-	/// Optional data
-	#[serde(skip_serializing_if = "Option::is_none")]
-	data: Option<StdCow<'a, RawValue>>,
+    /// Code
+    code: ErrorCode,
+    /// Message
+    message: StdCow<'a, str>,
+    /// Optional data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<StdCow<'a, RawValue>>,
 }
 
 impl<'a> ErrorObject<'a> {
-	/// Return the error code
-	pub fn code(&self) -> i32 {
-		self.code.code()
-	}
+    /// Return the error code
+    pub fn code(&self) -> i32 {
+        self.code.code()
+    }
 
-	/// Return the message
-	pub fn message(&self) -> &str {
-		self.message.borrow()
-	}
+    /// Return the message
+    pub fn message(&self) -> &str {
+        self.message.borrow()
+    }
 
-	/// Return the data associated with this error, if any
-	pub fn data(&self) -> Option<&RawValue> {
-		self.data.as_ref().map(|d| d.borrow())
-	}
+    /// Return the data associated with this error, if any
+    pub fn data(&self) -> Option<&RawValue> {
+        self.data.as_ref().map(|d| d.borrow())
+    }
 
-	/// Create a new `ErrorObjectOwned` with optional data.
-	pub fn owned<S: Serialize>(code: i32, message: impl Into<String>, data: Option<S>) -> ErrorObject<'static> {
-		let data = data.and_then(|d| serde_json::value::to_raw_value(&d).ok());
-		ErrorObject { code: code.into(), message: message.into().into(), data: data.map(StdCow::Owned) }
-	}
+    /// Create a new `ErrorObjectOwned` with optional data.
+    pub fn owned<S: Serialize>(
+        code: i32,
+        message: impl Into<String>,
+        data: Option<S>,
+    ) -> ErrorObject<'static> {
+        let data = data.and_then(|d| serde_json::value::to_raw_value(&d).ok());
+        ErrorObject {
+            code: code.into(),
+            message: message.into().into(),
+            data: data.map(StdCow::Owned),
+        }
+    }
 
-	/// Create a new [`ErrorObject`] with optional data.
-	pub fn borrowed(code: i32, message: &'a impl AsRef<str>, data: Option<&'a RawValue>) -> ErrorObject<'a> {
-		ErrorObject { code: code.into(), message: StdCow::Borrowed(message.as_ref()), data: data.map(StdCow::Borrowed) }
-	}
+    /// Create a new [`ErrorObject`] with optional data.
+    pub fn borrowed(
+        code: i32,
+        message: &'a impl AsRef<str>,
+        data: Option<&'a RawValue>,
+    ) -> ErrorObject<'a> {
+        ErrorObject {
+            code: code.into(),
+            message: StdCow::Borrowed(message.as_ref()),
+            data: data.map(StdCow::Borrowed),
+        }
+    }
 
-	/// Take ownership of the parameters within, if we haven't already.
-	pub fn into_owned(self) -> ErrorObject<'static> {
-		ErrorObject {
-			code: self.code,
-			message: StdCow::Owned(self.message.into_owned()),
-			data: self.data.map(|d| StdCow::Owned(d.into_owned())),
-		}
-	}
+    /// Take ownership of the parameters within, if we haven't already.
+    pub fn into_owned(self) -> ErrorObject<'static> {
+        ErrorObject {
+            code: self.code,
+            message: StdCow::Owned(self.message.into_owned()),
+            data: self.data.map(|d| StdCow::Owned(d.into_owned())),
+        }
+    }
 
-	/// Borrow the current [`ErrorObject`].
-	pub fn borrow(&'a self) -> ErrorObject<'a> {
-		ErrorObject {
-			code: self.code,
-			message: StdCow::Borrowed(self.message.borrow()),
-			data: self.data.as_ref().map(|d| StdCow::Borrowed(d.borrow())),
-		}
-	}
+    /// Borrow the current [`ErrorObject`].
+    pub fn borrow(&'a self) -> ErrorObject<'a> {
+        ErrorObject {
+            code: self.code,
+            message: StdCow::Borrowed(self.message.borrow()),
+            data: self.data.as_ref().map(|d| StdCow::Borrowed(d.borrow())),
+        }
+    }
 }
 
 impl<'a> PartialEq for ErrorObject<'a> {
-	fn eq(&self, other: &Self) -> bool {
-		let this_raw = self.data.as_ref().map(|r| r.get());
-		let other_raw = other.data.as_ref().map(|r| r.get());
-		self.code == other.code && self.message == other.message && this_raw == other_raw
-	}
+    fn eq(&self, other: &Self) -> bool {
+        let this_raw = self.data.as_ref().map(|r| r.get());
+        let other_raw = other.data.as_ref().map(|r| r.get());
+        self.code == other.code && self.message == other.message && this_raw == other_raw
+    }
 }
 
 impl<'a> From<ErrorCode> for ErrorObject<'a> {
-	fn from(code: ErrorCode) -> Self {
-		Self { code, message: code.message().into(), data: None }
-	}
+    fn from(code: ErrorCode) -> Self {
+        Self {
+            code,
+            message: code.message().into(),
+            data: None,
+        }
+    }
 }
 
 /// Parse error code.
@@ -202,158 +246,173 @@ pub const SERVER_IS_BUSY_MSG: &str = "Server is busy, try again later";
 /// Reserved for implementation-defined server-errors.
 pub const SERVER_ERROR_MSG: &str = "Server error";
 /// Batched requests not supported error message.
-pub const BATCHES_NOT_SUPPORTED_MSG: &str = "Batched requests are not supported by this server";
+pub const BATCHES_NOT_SUPPORTED_MSG: &str =
+    "Batched requests are not supported by this server";
 
 /// JSONRPC error code
 #[derive(Error, Debug, PartialEq, Copy, Clone)]
 pub enum ErrorCode {
-	/// Invalid JSON was received by the server.
-	/// An error occurred on the server while parsing the JSON text.
-	ParseError,
-	/// The request was too big.
-	OversizedRequest,
-	/// The JSON sent is not a valid Request object.
-	InvalidRequest,
-	/// The method does not exist / is not available.
-	MethodNotFound,
-	/// Server is busy / resources are at capacity.
-	ServerIsBusy,
-	/// Invalid method parameter(s).
-	InvalidParams,
-	/// Internal JSON-RPC error.
-	InternalError,
-	/// Reserved for implementation-defined server-errors.
-	ServerError(i32),
+    /// Invalid JSON was received by the server.
+    /// An error occurred on the server while parsing the JSON text.
+    ParseError,
+    /// The request was too big.
+    OversizedRequest,
+    /// The JSON sent is not a valid Request object.
+    InvalidRequest,
+    /// The method does not exist / is not available.
+    MethodNotFound,
+    /// Server is busy / resources are at capacity.
+    ServerIsBusy,
+    /// Invalid method parameter(s).
+    InvalidParams,
+    /// Internal JSON-RPC error.
+    InternalError,
+    /// Reserved for implementation-defined server-errors.
+    ServerError(i32),
 }
 
 impl ErrorCode {
-	/// Returns integer code value
-	pub const fn code(&self) -> i32 {
-		use ErrorCode::*;
-		match *self {
-			ParseError => PARSE_ERROR_CODE,
-			OversizedRequest => OVERSIZED_REQUEST_CODE,
-			InvalidRequest => INVALID_REQUEST_CODE,
-			MethodNotFound => METHOD_NOT_FOUND_CODE,
-			ServerIsBusy => SERVER_IS_BUSY_CODE,
-			InvalidParams => INVALID_PARAMS_CODE,
-			InternalError => INTERNAL_ERROR_CODE,
-			ServerError(code) => code,
-		}
-	}
+    /// Returns integer code value
+    pub const fn code(&self) -> i32 {
+        use ErrorCode::*;
+        match *self {
+            ParseError => PARSE_ERROR_CODE,
+            OversizedRequest => OVERSIZED_REQUEST_CODE,
+            InvalidRequest => INVALID_REQUEST_CODE,
+            MethodNotFound => METHOD_NOT_FOUND_CODE,
+            ServerIsBusy => SERVER_IS_BUSY_CODE,
+            InvalidParams => INVALID_PARAMS_CODE,
+            InternalError => INTERNAL_ERROR_CODE,
+            ServerError(code) => code,
+        }
+    }
 
-	/// Returns the message for the given error code.
-	pub const fn message(&self) -> &'static str {
-		use ErrorCode::*;
-		match self {
-			ParseError => PARSE_ERROR_MSG,
-			OversizedRequest => OVERSIZED_REQUEST_MSG,
-			InvalidRequest => INVALID_REQUEST_MSG,
-			MethodNotFound => METHOD_NOT_FOUND_MSG,
-			ServerIsBusy => SERVER_IS_BUSY_MSG,
-			InvalidParams => INVALID_PARAMS_MSG,
-			InternalError => INTERNAL_ERROR_MSG,
-			ServerError(_) => SERVER_ERROR_MSG,
-		}
-	}
+    /// Returns the message for the given error code.
+    pub const fn message(&self) -> &'static str {
+        use ErrorCode::*;
+        match self {
+            ParseError => PARSE_ERROR_MSG,
+            OversizedRequest => OVERSIZED_REQUEST_MSG,
+            InvalidRequest => INVALID_REQUEST_MSG,
+            MethodNotFound => METHOD_NOT_FOUND_MSG,
+            ServerIsBusy => SERVER_IS_BUSY_MSG,
+            InvalidParams => INVALID_PARAMS_MSG,
+            InternalError => INTERNAL_ERROR_MSG,
+            ServerError(_) => SERVER_ERROR_MSG,
+        }
+    }
 }
 
 impl fmt::Display for ErrorCode {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}: {}", self.code(), self.message())
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.code(), self.message())
+    }
 }
 
 impl From<i32> for ErrorCode {
-	fn from(code: i32) -> Self {
-		use ErrorCode::*;
-		match code {
-			PARSE_ERROR_CODE => ParseError,
-			OVERSIZED_REQUEST_CODE => OversizedRequest,
-			INVALID_REQUEST_CODE => InvalidRequest,
-			METHOD_NOT_FOUND_CODE => MethodNotFound,
-			INVALID_PARAMS_CODE => InvalidParams,
-			INTERNAL_ERROR_CODE => InternalError,
-			code => ServerError(code),
-		}
-	}
+    fn from(code: i32) -> Self {
+        use ErrorCode::*;
+        match code {
+            PARSE_ERROR_CODE => ParseError,
+            OVERSIZED_REQUEST_CODE => OversizedRequest,
+            INVALID_REQUEST_CODE => InvalidRequest,
+            METHOD_NOT_FOUND_CODE => MethodNotFound,
+            INVALID_PARAMS_CODE => InvalidParams,
+            INTERNAL_ERROR_CODE => InternalError,
+            code => ServerError(code),
+        }
+    }
 }
 
 impl<'a> serde::Deserialize<'a> for ErrorCode {
-	fn deserialize<D>(deserializer: D) -> Result<ErrorCode, D::Error>
-	where
-		D: Deserializer<'a>,
-	{
-		let code: i32 = Deserialize::deserialize(deserializer)?;
-		Ok(ErrorCode::from(code))
-	}
+    fn deserialize<D>(deserializer: D) -> Result<ErrorCode, D::Error>
+    where
+        D: Deserializer<'a>,
+    {
+        let code: i32 = Deserialize::deserialize(deserializer)?;
+        Ok(ErrorCode::from(code))
+    }
 }
 
 impl serde::Serialize for ErrorCode {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		serializer.serialize_i32(self.code())
-	}
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i32(self.code())
+    }
 }
 
 /// Error that occurs when a call failed.
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
-	/// Invalid params in the call.
-	#[error("Invalid params in the call: {0}")]
-	InvalidParams(#[source] anyhow::Error),
-	/// The call failed (let jsonrpsee assign default error code and error message).
-	#[error("RPC call failed: {0}")]
-	Failed(#[from] anyhow::Error),
-	/// Custom error with specific JSON-RPC error code, message and data.
-	#[error("RPC call failed: {0:?}")]
-	Custom(ErrorObject<'static>),
+    /// Invalid params in the call.
+    #[error("Invalid params in the call: {0}")]
+    InvalidParams(#[source] anyhow::Error),
+    /// The call failed (let jsonrpsee assign default error code and error message).
+    #[error("RPC call failed: {0}")]
+    Failed(#[from] anyhow::Error),
+    /// Custom error with specific JSON-RPC error code, message and data.
+    #[error("RPC call failed: {0:?}")]
+    Custom(ErrorObject<'static>),
 }
 
 impl CallError {
-	/// Create `CallError` from a generic error.
-	pub fn from_std_error<E>(err: E) -> Self
-	where
-		E: std::error::Error + Send + Sync + 'static,
-	{
-		CallError::Failed(err.into())
-	}
+    /// Create `CallError` from a generic error.
+    pub fn from_std_error<E>(err: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        CallError::Failed(err.into())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{ErrorCode, ErrorObject, ErrorResponse, Id, TwoPointZero};
+    use super::{
+        ErrorCode,
+        ErrorObject,
+        ErrorResponse,
+        Id,
+        TwoPointZero,
+    };
 
-	#[test]
-	fn deserialize_works() {
-		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
-		let exp = ErrorResponse {
-			jsonrpc: TwoPointZero,
-			error: ErrorObject { code: ErrorCode::ParseError, message: "Parse error".into(), data: None },
-			id: Id::Null,
-		};
-		let err: ErrorResponse = serde_json::from_str(ser).unwrap();
-		assert_eq!(exp, err);
-	}
+    #[test]
+    fn deserialize_works() {
+        let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error"},"id":null}"#;
+        let exp = ErrorResponse {
+            jsonrpc: TwoPointZero,
+            error: ErrorObject {
+                code: ErrorCode::ParseError,
+                message: "Parse error".into(),
+                data: None,
+            },
+            id: Id::Null,
+        };
+        let err: ErrorResponse = serde_json::from_str(ser).unwrap();
+        assert_eq!(exp, err);
+    }
 
-	#[test]
-	fn deserialize_with_optional_data() {
-		let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
-		let data = serde_json::value::to_raw_value(&"vegan").unwrap();
-		let exp = ErrorResponse {
-			jsonrpc: TwoPointZero,
-			error: ErrorObject::owned(ErrorCode::ParseError.code(), "Parse error", Some(data)),
-			id: Id::Null,
-		};
-		let err: ErrorResponse = serde_json::from_str(ser).unwrap();
-		assert_eq!(exp, err);
-	}
+    #[test]
+    fn deserialize_with_optional_data() {
+        let ser = r#"{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error", "data":"vegan"},"id":null}"#;
+        let data = serde_json::value::to_raw_value(&"vegan").unwrap();
+        let exp = ErrorResponse {
+            jsonrpc: TwoPointZero,
+            error: ErrorObject::owned(
+                ErrorCode::ParseError.code(),
+                "Parse error",
+                Some(data),
+            ),
+            id: Id::Null,
+        };
+        let err: ErrorResponse = serde_json::from_str(ser).unwrap();
+        assert_eq!(exp, err);
+    }
 
-	#[test]
-	fn deserialized_error_with_quoted_str() {
-		let raw = r#"{
+    #[test]
+    fn deserialized_error_with_quoted_str() {
+        let raw = r#"{
 			"error": {
 				"code": 1002,
 				"message": "desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
@@ -362,33 +421,38 @@ mod tests {
 			"id": 7,
 			"jsonrpc": "2.0"
 		}"#;
-		let err: ErrorResponse = serde_json::from_str(raw).unwrap();
+        let err: ErrorResponse = serde_json::from_str(raw).unwrap();
 
-		let data = serde_json::value::to_raw_value(&"\\\"validate_transaction\\\"").unwrap();
+        let data =
+            serde_json::value::to_raw_value(&"\\\"validate_transaction\\\"").unwrap();
 
-		assert_eq!(
-			err,
-			ErrorResponse {
-				error: ErrorObject::borrowed(
-					1002,
-					&"desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
-					Some(&*data)
-				),
-				id: Id::Number(7),
-				jsonrpc: TwoPointZero,
-			}
-		);
-	}
+        assert_eq!(
+            err,
+            ErrorResponse {
+                error: ErrorObject::borrowed(
+                    1002,
+                    &"desc: \"Could not decode `ChargeAssetTxPayment::asset_id`\" } })",
+                    Some(&*data)
+                ),
+                id: Id::Number(7),
+                jsonrpc: TwoPointZero,
+            }
+        );
+    }
 
-	#[test]
-	fn serialize_works() {
-		let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
-		let err = ErrorResponse {
-			jsonrpc: TwoPointZero,
-			error: ErrorObject { code: ErrorCode::InternalError, message: "Internal error".into(), data: None },
-			id: Id::Number(1337),
-		};
-		let ser = serde_json::to_string(&err).unwrap();
-		assert_eq!(exp, ser);
-	}
+    #[test]
+    fn serialize_works() {
+        let exp = r#"{"jsonrpc":"2.0","error":{"code":-32603,"message":"Internal error"},"id":1337}"#;
+        let err = ErrorResponse {
+            jsonrpc: TwoPointZero,
+            error: ErrorObject {
+                code: ErrorCode::InternalError,
+                message: "Internal error".into(),
+                data: None,
+            },
+            id: Id::Number(1337),
+        };
+        let ser = serde_json::to_string(&err).unwrap();
+        assert_eq!(exp, ser);
+    }
 }

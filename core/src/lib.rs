@@ -43,16 +43,16 @@ pub mod traits;
 pub mod middleware;
 
 cfg_http_helpers! {
-	pub mod http_helpers;
+    pub mod http_helpers;
 }
 
 cfg_server! {
-	pub mod id_providers;
-	pub mod server;
+    pub mod id_providers;
+    pub mod server;
 }
 
 cfg_client! {
-	pub mod client;
+    pub mod client;
 }
 
 pub use async_trait::async_trait;
@@ -65,16 +65,23 @@ pub type RpcResult<T> = std::result::Result<T, Error>;
 /// dependencies to be explicitly added on the client side.
 #[doc(hidden)]
 pub mod __reexports {
-	pub use async_trait::async_trait;
-	pub use serde;
-	pub use serde_json;
+    pub use async_trait::async_trait;
+    pub use serde;
+    pub use serde_json;
 }
 
 pub use beef::Cow;
-pub use serde::{de::DeserializeOwned, Serialize};
+pub use serde::{
+    de::DeserializeOwned,
+    Serialize,
+};
 pub use serde_json::{
-	to_value as to_json_value, value::to_raw_value as to_json_raw_value, value::RawValue as JsonRawValue,
-	Value as JsonValue,
+    to_value as to_json_value,
+    value::{
+        to_raw_value as to_json_raw_value,
+        RawValue as JsonRawValue,
+    },
+    Value as JsonValue,
 };
 
 /// Ten megabytes.

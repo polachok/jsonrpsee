@@ -26,38 +26,51 @@
 
 //! Types pertaining to JSON-RPC responses.
 
-use crate::params::{Id, SubscriptionId, TwoPointZero};
-use crate::request::Notification;
-use serde::{Deserialize, Serialize};
+use crate::{
+    params::{
+        Id,
+        SubscriptionId,
+        TwoPointZero,
+    },
+    request::Notification,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 /// JSON-RPC successful response object as defined in the [spec](https://www.jsonrpc.org/specification#response_object).
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Response<'a, T> {
-	/// JSON-RPC version.
-	pub jsonrpc: TwoPointZero,
-	/// Result.
-	pub result: T,
-	/// Request ID
-	#[serde(borrow)]
-	pub id: Id<'a>,
+    /// JSON-RPC version.
+    pub jsonrpc: TwoPointZero,
+    /// Result.
+    pub result: T,
+    /// Request ID
+    #[serde(borrow)]
+    pub id: Id<'a>,
 }
 
 impl<'a, T> Response<'a, T> {
-	/// Create a new [`Response`].
-	pub fn new(result: T, id: Id<'a>) -> Response<'a, T> {
-		Response { jsonrpc: TwoPointZero, result, id }
-	}
+    /// Create a new [`Response`].
+    pub fn new(result: T, id: Id<'a>) -> Response<'a, T> {
+        Response {
+            jsonrpc: TwoPointZero,
+            result,
+            id,
+        }
+    }
 }
 
 /// Return value for subscriptions.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubscriptionPayload<'a, T> {
-	/// Subscription ID
-	#[serde(borrow)]
-	pub subscription: SubscriptionId<'a>,
-	/// Result.
-	pub result: T,
+    /// Subscription ID
+    #[serde(borrow)]
+    pub subscription: SubscriptionId<'a>,
+    /// Result.
+    pub result: T,
 }
 
 /// Subscription response object, embedding a [`SubscriptionPayload`] in the `params` member along with `result` field.
@@ -68,30 +81,44 @@ pub type SubscriptionError<'a, T> = Notification<'a, SubscriptionPayloadError<'a
 /// Error value for subscriptions.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubscriptionPayloadError<'a, T> {
-	/// Subscription ID
-	#[serde(borrow)]
-	pub subscription: SubscriptionId<'a>,
-	/// Result.
-	pub error: T,
+    /// Subscription ID
+    #[serde(borrow)]
+    pub subscription: SubscriptionId<'a>,
+    /// Result.
+    pub error: T,
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{Id, Response, TwoPointZero};
+    use super::{
+        Id,
+        Response,
+        TwoPointZero,
+    };
 
-	#[test]
-	fn serialize_call_response() {
-		let ser = serde_json::to_string(&Response { jsonrpc: TwoPointZero, result: "ok", id: Id::Number(1) }).unwrap();
-		let exp = r#"{"jsonrpc":"2.0","result":"ok","id":1}"#;
-		assert_eq!(ser, exp);
-	}
+    #[test]
+    fn serialize_call_response() {
+        let ser = serde_json::to_string(&Response {
+            jsonrpc: TwoPointZero,
+            result: "ok",
+            id: Id::Number(1),
+        })
+        .unwrap();
+        let exp = r#"{"jsonrpc":"2.0","result":"ok","id":1}"#;
+        assert_eq!(ser, exp);
+    }
 
-	#[test]
-	fn deserialize_call() {
-		let exp = Response { jsonrpc: TwoPointZero, result: 99_u64, id: Id::Number(11) };
-		let dsr: Response<u64> = serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
-		assert_eq!(dsr.jsonrpc, exp.jsonrpc);
-		assert_eq!(dsr.result, exp.result);
-		assert_eq!(dsr.id, exp.id);
-	}
+    #[test]
+    fn deserialize_call() {
+        let exp = Response {
+            jsonrpc: TwoPointZero,
+            result: 99_u64,
+            id: Id::Number(11),
+        };
+        let dsr: Response<u64> =
+            serde_json::from_str(r#"{"jsonrpc":"2.0", "result":99, "id":11}"#).unwrap();
+        assert_eq!(dsr.jsonrpc, exp.jsonrpc);
+        assert_eq!(dsr.result, exp.result);
+        assert_eq!(dsr.id, exp.id);
+    }
 }

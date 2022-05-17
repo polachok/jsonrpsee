@@ -26,205 +26,247 @@
 
 //! Host header validation.
 
-use crate::access_control::matcher::{Matcher, Pattern};
+use crate::access_control::matcher::{
+    Matcher,
+    Pattern,
+};
 
 const SPLIT_PROOF: &str = "split always returns non-empty iterator.";
 
 /// Port pattern
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
 pub enum Port {
-	/// No port specified (default port)
-	None,
-	/// Port specified as a wildcard pattern
-	Pattern(String),
-	/// Fixed numeric port
-	Fixed(u16),
+    /// No port specified (default port)
+    None,
+    /// Port specified as a wildcard pattern
+    Pattern(String),
+    /// Fixed numeric port
+    Fixed(u16),
 }
 
 impl From<Option<u16>> for Port {
-	fn from(opt: Option<u16>) -> Self {
-		match opt {
-			Some(port) => Port::Fixed(port),
-			None => Port::None,
-		}
-	}
+    fn from(opt: Option<u16>) -> Self {
+        match opt {
+            Some(port) => Port::Fixed(port),
+            None => Port::None,
+        }
+    }
 }
 
 impl From<u16> for Port {
-	fn from(port: u16) -> Port {
-		Port::Fixed(port)
-	}
+    fn from(port: u16) -> Port {
+        Port::Fixed(port)
+    }
 }
 
 /// Host type
 #[derive(Clone, Hash, PartialEq, Eq, Debug)]
 pub struct Host {
-	hostname: String,
-	port: Port,
-	host_with_port: String,
-	matcher: Matcher,
+    hostname: String,
+    port: Port,
+    host_with_port: String,
+    matcher: Matcher,
 }
 
 impl<T: AsRef<str>> From<T> for Host {
-	fn from(string: T) -> Self {
-		Host::parse(string.as_ref())
-	}
+    fn from(string: T) -> Self {
+        Host::parse(string.as_ref())
+    }
 }
 
 impl Host {
-	/// Creates a new `Host` given hostname and port number.
-	pub fn new<T: Into<Port>>(hostname: &str, port: T) -> Self {
-		let port = port.into();
-		let hostname = Self::pre_process(hostname);
-		let host_with_port = Self::from_str(&hostname, &port);
-		let matcher = Matcher::new(&host_with_port);
+    /// Creates a new `Host` given hostname and port number.
+    pub fn new<T: Into<Port>>(hostname: &str, port: T) -> Self {
+        let port = port.into();
+        let hostname = Self::pre_process(hostname);
+        let host_with_port = Self::from_str(&hostname, &port);
+        let matcher = Matcher::new(&host_with_port);
 
-		Host { hostname, port, host_with_port, matcher }
-	}
+        Host {
+            hostname,
+            port,
+            host_with_port,
+            matcher,
+        }
+    }
 
-	/// Attempts to parse given string as a `Host`.
-	/// NOTE: This method always succeeds and falls back to sensible defaults.
-	pub fn parse(hostname: &str) -> Self {
-		let hostname = Self::pre_process(hostname);
-		let mut hostname = hostname.split(':');
-		let host = hostname.next().expect(SPLIT_PROOF);
-		let port = match hostname.next() {
-			None => Port::None,
-			Some(port) => match port.parse::<u16>().ok() {
-				Some(num) => Port::Fixed(num),
-				None => Port::Pattern(port.into()),
-			},
-		};
+    /// Attempts to parse given string as a `Host`.
+    /// NOTE: This method always succeeds and falls back to sensible defaults.
+    pub fn parse(hostname: &str) -> Self {
+        let hostname = Self::pre_process(hostname);
+        let mut hostname = hostname.split(':');
+        let host = hostname.next().expect(SPLIT_PROOF);
+        let port = match hostname.next() {
+            None => Port::None,
+            Some(port) => {
+                match port.parse::<u16>().ok() {
+                    Some(num) => Port::Fixed(num),
+                    None => Port::Pattern(port.into()),
+                }
+            }
+        };
 
-		Host::new(host, port)
-	}
+        Host::new(host, port)
+    }
 
-	fn pre_process(host: &str) -> String {
-		// Remove possible protocol definition
-		let mut it = host.split("://");
-		let protocol = it.next().expect(SPLIT_PROOF);
-		let host = match it.next() {
-			Some(data) => data,
-			None => protocol,
-		};
+    fn pre_process(host: &str) -> String {
+        // Remove possible protocol definition
+        let mut it = host.split("://");
+        let protocol = it.next().expect(SPLIT_PROOF);
+        let host = match it.next() {
+            Some(data) => data,
+            None => protocol,
+        };
 
-		let mut it = host.split('/');
-		it.next().expect(SPLIT_PROOF).to_lowercase()
-	}
+        let mut it = host.split('/');
+        it.next().expect(SPLIT_PROOF).to_lowercase()
+    }
 
-	fn from_str(hostname: &str, port: &Port) -> String {
-		format!(
-			"{}{}",
-			hostname,
-			match *port {
-				Port::Fixed(port) => format!(":{}", port),
-				Port::Pattern(ref port) => format!(":{}", port),
-				Port::None => "".into(),
-			},
-		)
-	}
+    fn from_str(hostname: &str, port: &Port) -> String {
+        format!(
+            "{}{}",
+            hostname,
+            match *port {
+                Port::Fixed(port) => format!(":{}", port),
+                Port::Pattern(ref port) => format!(":{}", port),
+                Port::None => "".into(),
+            },
+        )
+    }
 }
 
 impl Pattern for Host {
-	fn matches<T: AsRef<str>>(&self, other: T) -> bool {
-		self.matcher.matches(other)
-	}
+    fn matches<T: AsRef<str>>(&self, other: T) -> bool {
+        self.matcher.matches(other)
+    }
 }
 
 impl std::ops::Deref for Host {
-	type Target = str;
+    type Target = str;
 
-	fn deref(&self) -> &Self::Target {
-		&self.host_with_port
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.host_with_port
+    }
 }
 
 /// Specifies if domains should be validated.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DomainsValidation<T> {
-	/// Allow only domains on the list.
-	AllowOnly(Vec<T>),
-	/// Disable domains validation completely.
-	Disabled,
+    /// Allow only domains on the list.
+    AllowOnly(Vec<T>),
+    /// Disable domains validation completely.
+    Disabled,
 }
 
 impl<T> From<Option<Vec<T>>> for DomainsValidation<T> {
-	fn from(other: Option<Vec<T>>) -> Self {
-		match other {
-			Some(list) => DomainsValidation::AllowOnly(list),
-			None => DomainsValidation::Disabled,
-		}
-	}
+    fn from(other: Option<Vec<T>>) -> Self {
+        match other {
+            Some(list) => DomainsValidation::AllowOnly(list),
+            None => DomainsValidation::Disabled,
+        }
+    }
 }
 
 /// Returns `true` when `Host` header is whitelisted in `allow_hosts`.
 pub(crate) fn is_host_valid(host: Option<&str>, allow_hosts: &AllowHosts) -> bool {
-	match host {
-		None => false,
-		Some(ref host) => match allow_hosts {
-			AllowHosts::Any => true,
-			AllowHosts::Only(allow_hosts) => allow_hosts.iter().any(|h| h.matches(host)),
-		},
-	}
+    match host {
+        None => false,
+        Some(ref host) => {
+            match allow_hosts {
+                AllowHosts::Any => true,
+                AllowHosts::Only(allow_hosts) => {
+                    allow_hosts.iter().any(|h| h.matches(host))
+                }
+            }
+        }
+    }
 }
 
 /// Allowed hosts for http header 'host'
 #[derive(Clone, Debug)]
 pub enum AllowHosts {
-	/// Allow requests from any host
-	Any,
-	/// Allow only a selection of specific hosts
-	Only(Vec<Host>),
+    /// Allow requests from any host
+    Any,
+    /// Allow only a selection of specific hosts
+    Only(Vec<Host>),
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{is_host_valid, AllowHosts, Host};
+    use super::{
+        is_host_valid,
+        AllowHosts,
+        Host,
+    };
 
-	#[test]
-	fn should_parse_host() {
-		assert_eq!(Host::parse("http://parity.io"), Host::new("parity.io", None));
-		assert_eq!(Host::parse("https://parity.io:8443"), Host::new("parity.io", Some(8443)));
-		assert_eq!(Host::parse("chrome-extension://124.0.0.1"), Host::new("124.0.0.1", None));
-		assert_eq!(Host::parse("parity.io/somepath"), Host::new("parity.io", None));
-		assert_eq!(Host::parse("127.0.0.1:8545/somepath"), Host::new("127.0.0.1", Some(8545)));
-	}
+    #[test]
+    fn should_parse_host() {
+        assert_eq!(
+            Host::parse("http://parity.io"),
+            Host::new("parity.io", None)
+        );
+        assert_eq!(
+            Host::parse("https://parity.io:8443"),
+            Host::new("parity.io", Some(8443))
+        );
+        assert_eq!(
+            Host::parse("chrome-extension://124.0.0.1"),
+            Host::new("124.0.0.1", None)
+        );
+        assert_eq!(
+            Host::parse("parity.io/somepath"),
+            Host::new("parity.io", None)
+        );
+        assert_eq!(
+            Host::parse("127.0.0.1:8545/somepath"),
+            Host::new("127.0.0.1", Some(8545))
+        );
+    }
 
-	#[test]
-	fn should_reject_when_there_is_no_header() {
-		let valid = is_host_valid(None, &AllowHosts::Any);
-		assert!(!valid);
-		let valid = is_host_valid(None, &AllowHosts::Only(vec![]));
-		assert!(!valid);
-	}
+    #[test]
+    fn should_reject_when_there_is_no_header() {
+        let valid = is_host_valid(None, &AllowHosts::Any);
+        assert!(!valid);
+        let valid = is_host_valid(None, &AllowHosts::Only(vec![]));
+        assert!(!valid);
+    }
 
-	#[test]
-	fn should_reject_when_validation_is_disabled() {
-		let valid = is_host_valid(Some("any"), &AllowHosts::Any);
-		assert!(valid);
-	}
+    #[test]
+    fn should_reject_when_validation_is_disabled() {
+        let valid = is_host_valid(Some("any"), &AllowHosts::Any);
+        assert!(valid);
+    }
 
-	#[test]
-	fn should_reject_if_header_not_on_the_list() {
-		let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec![]));
-		assert!(!valid);
-	}
+    #[test]
+    fn should_reject_if_header_not_on_the_list() {
+        let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec![]));
+        assert!(!valid);
+    }
 
-	#[test]
-	fn should_accept_if_on_the_list() {
-		let valid = is_host_valid(Some("parity.io"), &AllowHosts::Only(vec!["parity.io".into()]));
-		assert!(valid);
-	}
+    #[test]
+    fn should_accept_if_on_the_list() {
+        let valid = is_host_valid(
+            Some("parity.io"),
+            &AllowHosts::Only(vec!["parity.io".into()]),
+        );
+        assert!(valid);
+    }
 
-	#[test]
-	fn should_accept_if_on_the_list_with_port() {
-		let valid = is_host_valid(Some("parity.io:443"), &AllowHosts::Only(vec!["parity.io:443".into()]));
-		assert!(valid);
-	}
+    #[test]
+    fn should_accept_if_on_the_list_with_port() {
+        let valid = is_host_valid(
+            Some("parity.io:443"),
+            &AllowHosts::Only(vec!["parity.io:443".into()]),
+        );
+        assert!(valid);
+    }
 
-	#[test]
-	fn should_support_wildcards() {
-		let valid = is_host_valid(Some("parity.web3.site:8180"), &AllowHosts::Only(vec!["*.web3.site:*".into()]));
-		assert!(valid);
-	}
+    #[test]
+    fn should_support_wildcards() {
+        let valid = is_host_valid(
+            Some("parity.web3.site:8180"),
+            &AllowHosts::Only(vec!["*.web3.site:*".into()]),
+        );
+        assert!(valid);
+    }
 }

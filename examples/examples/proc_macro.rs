@@ -26,10 +26,20 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::core::{async_trait, client::Subscription, Error};
-use jsonrpsee::proc_macros::rpc;
-use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{PendingSubscription, WsServerBuilder, WsServerHandle};
+use jsonrpsee::{
+    core::{
+        async_trait,
+        client::Subscription,
+        Error,
+    },
+    proc_macros::rpc,
+    ws_client::WsClientBuilder,
+    ws_server::{
+        PendingSubscription,
+        WsServerBuilder,
+        WsServerHandle,
+    },
+};
 
 type ExampleHash = [u8; 32];
 type ExampleStorageKey = Vec<u8>;
@@ -37,60 +47,76 @@ type ExampleStorageKey = Vec<u8>;
 #[rpc(server, client, namespace = "state")]
 pub trait Rpc<Hash: Clone, StorageKey>
 where
-	Hash: std::fmt::Debug,
+    Hash: std::fmt::Debug,
 {
-	/// Async method call example.
-	#[method(name = "getKeys")]
-	async fn storage_keys(&self, storage_key: StorageKey, hash: Option<Hash>) -> Result<Vec<StorageKey>, Error>;
+    /// Async method call example.
+    #[method(name = "getKeys")]
+    async fn storage_keys(
+        &self,
+        storage_key: StorageKey,
+        hash: Option<Hash>,
+    ) -> Result<Vec<StorageKey>, Error>;
 
-	/// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
-	#[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
-	fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
+    /// Subscription that takes a `StorageKey` as input and produces a `Vec<Hash>`.
+    #[subscription(name = "subscribeStorage" => "override", item = Vec<Hash>)]
+    fn subscribe_storage(&self, keys: Option<Vec<StorageKey>>);
 }
 
 pub struct RpcServerImpl;
 
 #[async_trait]
 impl RpcServer<ExampleHash, ExampleStorageKey> for RpcServerImpl {
-	async fn storage_keys(
-		&self,
-		storage_key: ExampleStorageKey,
-		_hash: Option<ExampleHash>,
-	) -> Result<Vec<ExampleStorageKey>, Error> {
-		Ok(vec![storage_key])
-	}
+    async fn storage_keys(
+        &self,
+        storage_key: ExampleStorageKey,
+        _hash: Option<ExampleHash>,
+    ) -> Result<Vec<ExampleStorageKey>, Error> {
+        Ok(vec![storage_key])
+    }
 
-	fn subscribe_storage(&self, pending: PendingSubscription, _keys: Option<Vec<ExampleStorageKey>>) {
-		if let Some(mut sink) = pending.accept() {
-			let _ = sink.send(&vec![[0; 32]]);
-		}
-	}
+    fn subscribe_storage(
+        &self,
+        pending: PendingSubscription,
+        _keys: Option<Vec<ExampleStorageKey>>,
+    ) {
+        if let Some(mut sink) = pending.accept() {
+            let _ = sink.send(&vec![[0; 32]]);
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+    tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init()
+        .expect("setting default subscriber failed");
 
-	let (server_addr, _handle) = run_server().await?;
-	let url = format!("ws://{}", server_addr);
+    let (server_addr, _handle) = run_server().await?;
+    let url = format!("ws://{}", server_addr);
 
-	let client = WsClientBuilder::default().build(&url).await?;
-	assert_eq!(client.storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>).await.unwrap(), vec![vec![1, 2, 3, 4]]);
+    let client = WsClientBuilder::default().build(&url).await?;
+    assert_eq!(
+        client
+            .storage_keys(vec![1, 2, 3, 4], None::<ExampleHash>)
+            .await
+            .unwrap(),
+        vec![vec![1, 2, 3, 4]]
+    );
 
-	let mut sub: Subscription<Vec<ExampleHash>> =
-		RpcClient::<ExampleHash, ExampleStorageKey>::subscribe_storage(&client, None).await.unwrap();
-	assert_eq!(Some(vec![[0; 32]]), sub.next().await.transpose().unwrap());
+    let mut sub: Subscription<Vec<ExampleHash>> =
+        RpcClient::<ExampleHash, ExampleStorageKey>::subscribe_storage(&client, None)
+            .await
+            .unwrap();
+    assert_eq!(Some(vec![[0; 32]]), sub.next().await.transpose().unwrap());
 
-	Ok(())
+    Ok(())
 }
 
 async fn run_server() -> anyhow::Result<(SocketAddr, WsServerHandle)> {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+    let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
 
-	let addr = server.local_addr()?;
-	let handle = server.start(RpcServerImpl.into_rpc())?;
-	Ok((addr, handle))
+    let addr = server.local_addr()?;
+    let handle = server.start(RpcServerImpl.into_rpc())?;
+    Ok((addr, handle))
 }

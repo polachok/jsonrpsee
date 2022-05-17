@@ -26,33 +26,45 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::client_transport::ws::{Uri, WsTransportClientBuilder};
-use jsonrpsee::core::client::{Client, ClientBuilder, ClientT};
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
+use jsonrpsee::{
+    client_transport::ws::{
+        Uri,
+        WsTransportClientBuilder,
+    },
+    core::client::{
+        Client,
+        ClientBuilder,
+        ClientT,
+    },
+    ws_server::{
+        RpcModule,
+        WsServerBuilder,
+    },
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+    tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init()
+        .expect("setting default subscriber failed");
 
-	let addr = run_server().await?;
-	let uri: Uri = format!("ws://{}", addr).parse()?;
+    let addr = run_server().await?;
+    let uri: Uri = format!("ws://{}", addr).parse()?;
 
-	let (tx, rx) = WsTransportClientBuilder::default().build(uri).await?;
-	let client: Client = ClientBuilder::default().build_with_tokio(tx, rx);
-	let response: String = client.request("say_hello", None).await?;
-	tracing::info!("response: {:?}", response);
+    let (tx, rx) = WsTransportClientBuilder::default().build(uri).await?;
+    let client: Client = ClientBuilder::default().build_with_tokio(tx, rx);
+    let response: String = client.request("say_hello", None).await?;
+    tracing::info!("response: {:?}", response);
 
-	Ok(())
+    Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
-	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("lo"))?;
-	let addr = server.local_addr()?;
-	server.start(module)?;
-	Ok(addr)
+    let server = WsServerBuilder::default().build("127.0.0.1:0").await?;
+    let mut module = RpcModule::new(());
+    module.register_method("say_hello", |_, _| Ok("lo"))?;
+    let addr = server.local_addr()?;
+    server.start(module)?;
+    Ok(addr)
 }

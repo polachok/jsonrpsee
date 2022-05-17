@@ -33,10 +33,11 @@ use serde_json::value::RawValue;
 /// If your type isn't a sequence, for example `String`, `usize` or similar
 /// you must insert it in a tuple, slice, array or Vec for it to work.
 pub trait ToRpcParams: Serialize {
-	/// Serialize the type as a JSON array.
-	fn to_rpc_params(&self) -> Result<Box<RawValue>, serde_json::Error> {
-		serde_json::to_string(&self).map(|json| RawValue::from_string(json).expect("JSON String; qed"))
-	}
+    /// Serialize the type as a JSON array.
+    fn to_rpc_params(&self) -> Result<Box<RawValue>, serde_json::Error> {
+        serde_json::to_string(&self)
+            .map(|json| RawValue::from_string(json).expect("JSON String; qed"))
+    }
 }
 
 impl<P: Serialize> ToRpcParams for &[P] {}
@@ -52,28 +53,28 @@ macro_rules! tuple_impls {
 }
 
 tuple_impls! {
-	1 => (0 T0)
-	2 => (0 T0 1 T1)
-	3 => (0 T0 1 T1 2 T2)
-	4 => (0 T0 1 T1 2 T2 3 T3)
-	5 => (0 T0 1 T1 2 T2 3 T3 4 T4)
-	6 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5)
-	7 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6)
-	8 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7)
-	9 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8)
-	10 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9)
-	11 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10)
-	12 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11)
-	13 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12)
-	14 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13)
-	15 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14)
-	16 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14 15 T15)
+    1 => (0 T0)
+    2 => (0 T0 1 T1)
+    3 => (0 T0 1 T1 2 T2)
+    4 => (0 T0 1 T1 2 T2 3 T3)
+    5 => (0 T0 1 T1 2 T2 3 T3 4 T4)
+    6 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5)
+    7 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6)
+    8 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7)
+    9 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8)
+    10 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9)
+    11 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10)
+    12 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11)
+    13 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12)
+    14 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13)
+    15 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14)
+    16 => (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11 12 T12 13 T13 14 T14 15 T15)
 }
 
 /// Trait to generate subscription IDs.
 pub trait IdProvider: Send + Sync + std::fmt::Debug {
-	/// Returns the next ID for the subscription.
-	fn next_id(&self) -> SubscriptionId<'static>;
+    /// Returns the next ID for the subscription.
+    fn next_id(&self) -> SubscriptionId<'static>;
 }
 
 // Implement `IdProvider` for `Box<T>`
@@ -82,7 +83,7 @@ pub trait IdProvider: Send + Sync + std::fmt::Debug {
 // of the required `'static lifetime`
 // Thus, `&dyn IdProvider` won't work.
 impl<T: IdProvider + ?Sized> IdProvider for Box<T> {
-	fn next_id(&self) -> SubscriptionId<'static> {
-		(**self).next_id()
-	}
+    fn next_id(&self) -> SubscriptionId<'static> {
+        (**self).next_id()
+    }
 }

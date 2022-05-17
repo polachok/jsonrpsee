@@ -26,37 +26,52 @@
 
 //! Example showing how to add multiple middlewares to the same server.
 
-use std::net::SocketAddr;
-use std::process::Command;
-use std::time::Instant;
+use std::{
+    net::SocketAddr,
+    process::Command,
+    time::Instant,
+};
 
-use jsonrpsee::core::{client::ClientT, middleware};
-use jsonrpsee::rpc_params;
-use jsonrpsee::ws_client::WsClientBuilder;
-use jsonrpsee::ws_server::{RpcModule, WsServerBuilder};
+use jsonrpsee::{
+    core::{
+        client::ClientT,
+        middleware,
+    },
+    rpc_params,
+    ws_client::WsClientBuilder,
+    ws_server::{
+        RpcModule,
+        WsServerBuilder,
+    },
+};
 
 /// Example middleware to measure call execution time.
 #[derive(Clone)]
 struct Timings;
 
 impl middleware::Middleware for Timings {
-	type Instant = Instant;
+    type Instant = Instant;
 
-	fn on_request(&self) -> Self::Instant {
-		Instant::now()
-	}
+    fn on_request(&self) -> Self::Instant {
+        Instant::now()
+    }
 
-	fn on_call(&self, name: &str) {
-		println!("[Timings] They called '{}'", name);
-	}
+    fn on_call(&self, name: &str) {
+        println!("[Timings] They called '{}'", name);
+    }
 
-	fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
-		println!("[Timings] call={}, worked? {}, duration {:?}", name, succeess, started_at.elapsed());
-	}
+    fn on_result(&self, name: &str, succeess: bool, started_at: Self::Instant) {
+        println!(
+            "[Timings] call={}, worked? {}, duration {:?}",
+            name,
+            succeess,
+            started_at.elapsed()
+        );
+    }
 
-	fn on_response(&self, started_at: Self::Instant) {
-		println!("[Timings] Response duration {:?}", started_at.elapsed());
-	}
+    fn on_response(&self, started_at: Self::Instant) {
+        println!("[Timings] Response duration {:?}", started_at.elapsed());
+    }
 }
 
 /// Example middleware to keep a watch on the number of total threads started in the system.
@@ -64,67 +79,86 @@ impl middleware::Middleware for Timings {
 struct ThreadWatcher;
 
 impl ThreadWatcher {
-	// Count the number of threads visible to this process. Counts the lines of `ps -eL` and equivalent minus one (the header).
-	// Cribbed from the `palaver` crate.
-	fn count_threads() -> usize {
-		let out = if cfg!(any(target_os = "linux", target_os = "android")) {
-			Command::new("ps").arg("-eL").output().expect("failed to execute process")
-		} else if cfg!(any(target_os = "macos", target_os = "ios")) {
-			Command::new("ps").arg("-eM").output().expect("failed to execute process")
-		} else {
-			unimplemented!()
-		};
-		out.stdout.split(|&x| x == b'\n').skip(1).filter(|x| !x.is_empty()).count()
-	}
+    // Count the number of threads visible to this process. Counts the lines of `ps -eL` and equivalent minus one (the header).
+    // Cribbed from the `palaver` crate.
+    fn count_threads() -> usize {
+        let out = if cfg!(any(target_os = "linux", target_os = "android")) {
+            Command::new("ps")
+                .arg("-eL")
+                .output()
+                .expect("failed to execute process")
+        } else if cfg!(any(target_os = "macos", target_os = "ios")) {
+            Command::new("ps")
+                .arg("-eM")
+                .output()
+                .expect("failed to execute process")
+        } else {
+            unimplemented!()
+        };
+        out.stdout
+            .split(|&x| x == b'\n')
+            .skip(1)
+            .filter(|x| !x.is_empty())
+            .count()
+    }
 }
 
 impl middleware::Middleware for ThreadWatcher {
-	type Instant = isize;
+    type Instant = isize;
 
-	fn on_request(&self) -> Self::Instant {
-		let threads = Self::count_threads();
-		println!("[ThreadWatcher] Threads running on the machine at the start of a call: {}", threads);
-		threads as isize
-	}
+    fn on_request(&self) -> Self::Instant {
+        let threads = Self::count_threads();
+        println!(
+            "[ThreadWatcher] Threads running on the machine at the start of a call: {}",
+            threads
+        );
+        threads as isize
+    }
 
-	fn on_response(&self, started_at: Self::Instant) {
-		let current_nr_threads = Self::count_threads() as isize;
-		println!("[ThreadWatcher] Request started {} threads", current_nr_threads - started_at);
-	}
+    fn on_response(&self, started_at: Self::Instant) {
+        let current_nr_threads = Self::count_threads() as isize;
+        println!(
+            "[ThreadWatcher] Request started {} threads",
+            current_nr_threads - started_at
+        );
+    }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	tracing_subscriber::FmtSubscriber::builder()
-		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-		.try_init()
-		.expect("setting default subscriber failed");
+    tracing_subscriber::FmtSubscriber::builder()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .try_init()
+        .expect("setting default subscriber failed");
 
-	let addr = run_server().await?;
-	let url = format!("ws://{}", addr);
+    let addr = run_server().await?;
+    let url = format!("ws://{}", addr);
 
-	let client = WsClientBuilder::default().build(&url).await?;
-	let response: String = client.request("say_hello", None).await?;
-	println!("response: {:?}", response);
-	let _response: Result<String, _> = client.request("unknown_method", None).await;
-	let _ = client.request::<String>("say_hello", None).await?;
-	let _ = client.request::<()>("thready", rpc_params![4]).await?;
+    let client = WsClientBuilder::default().build(&url).await?;
+    let response: String = client.request("say_hello", None).await?;
+    println!("response: {:?}", response);
+    let _response: Result<String, _> = client.request("unknown_method", None).await;
+    let _ = client.request::<String>("say_hello", None).await?;
+    let _ = client.request::<()>("thready", rpc_params![4]).await?;
 
-	Ok(())
+    Ok(())
 }
 
 async fn run_server() -> anyhow::Result<SocketAddr> {
-	let server = WsServerBuilder::new().set_middleware((Timings, ThreadWatcher)).build("127.0.0.1:0").await?;
-	let mut module = RpcModule::new(());
-	module.register_method("say_hello", |_, _| Ok("lo"))?;
-	module.register_method("thready", |params, _| {
-		let thread_count: usize = params.one().unwrap();
-		for _ in 0..thread_count {
-			std::thread::spawn(|| std::thread::sleep(std::time::Duration::from_secs(1)));
-		}
-		Ok(())
-	})?;
-	let addr = server.local_addr()?;
-	server.start(module)?;
-	Ok(addr)
+    let server = WsServerBuilder::new()
+        .set_middleware((Timings, ThreadWatcher))
+        .build("127.0.0.1:0")
+        .await?;
+    let mut module = RpcModule::new(());
+    module.register_method("say_hello", |_, _| Ok("lo"))?;
+    module.register_method("thready", |params, _| {
+        let thread_count: usize = params.one().unwrap();
+        for _ in 0..thread_count {
+            std::thread::spawn(|| std::thread::sleep(std::time::Duration::from_secs(1)));
+        }
+        Ok(())
+    })?;
+    let addr = server.local_addr()?;
+    server.start(module)?;
+    Ok(addr)
 }
