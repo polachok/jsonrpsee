@@ -47,7 +47,10 @@ pub struct AccessControl {
 impl AccessControl {
 	/// Validate incoming request by http HOST
 	pub fn deny_host(&self, request: &hyper::Request<hyper::Body>) -> bool {
-		!hosts::is_host_valid(http_helpers::read_header_value(request.headers(), "host"), &self.allowed_hosts)
+		!hosts::is_host_valid(
+			http_helpers::read_header_value(request.headers(), "host").or_else(|| request.uri().host()),
+			&self.allowed_hosts,
+		)
 	}
 
 	/// Validate incoming request by CORS origin
