@@ -456,6 +456,10 @@ impl<M: Middleware> Server<M> {
 
 						let host = match http_helpers::read_header_value(request.headers(), "host") {
 							Some(origin) => origin,
+							None if request.version() == hyper::Version::HTTP_2 => match request.uri().host() {
+								Some(origin) => origin,
+								None => return Ok(malformed()),
+							},
 							None => return Ok(malformed()),
 						};
 						let maybe_origin = http_helpers::read_header_value(request.headers(), "origin");
