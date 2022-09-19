@@ -1041,7 +1041,7 @@ impl SubscriptionSink {
 
 	fn is_active_subscription(&self) -> bool {
 		match self.unsubscribe.as_ref() {
-			Some(unsubscribe) => !unsubscribe.has_changed().is_err(),
+			Some(_unsubscribe) => todo!("@plhk: didn't expect this to run"), // !unsubscribe.has_changed().is_err(),
 			_ => false,
 		}
 	}
