@@ -43,7 +43,7 @@ use jsonrpsee_core::error::{Error, GenericTransportError};
 use jsonrpsee_core::http_helpers::{self, read_body};
 use jsonrpsee_core::middleware::{self, HttpMiddleware as Middleware};
 use jsonrpsee_core::server::access_control::AccessControl;
-use jsonrpsee_core::server::helpers::{prepare_error, MethodResponse};
+use jsonrpsee_core::server::helpers::{prepare_batch_error, prepare_error, MethodResponse};
 use jsonrpsee_core::server::helpers::{BatchResponse, BatchResponseBuilder};
 use jsonrpsee_core::server::resource_limiting::Resources;
 use jsonrpsee_core::server::rpc_module::{MethodKind, Methods};
@@ -802,8 +802,16 @@ where
 	// "If the batch rpc call itself fails to be recognized as an valid JSON or as an
 	// Array with at least one value, the response from the Server MUST be a single
 	// Response object." – The Spec.
-	let (id, code) = prepare_error(&data);
-	BatchResponse::error(id, ErrorObject::from(code))
+	let (ids, code) = prepare_batch_error(&data);
+	let batch_response = ids
+		.into_iter()
+		.try_fold(BatchResponseBuilder::new_with_limit(call.max_response_body_size as usize), |batch_response, id| {
+			batch_response.append(&MethodResponse::error(id, ErrorObject::from(code)))
+		});
+	match batch_response {
+		Ok(batch) => batch.finish(),
+		Err(batch_err) => batch_err,
+	}
 }
 
 async fn process_single_request<M: Middleware>(data: Vec<u8>, call: CallData<'_, M>) -> MethodResponse {
