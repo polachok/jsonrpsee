@@ -440,6 +440,8 @@ impl<M: Middleware> Server<M> {
 
 			async move {
 				Ok::<_, HyperError>(service_fn(move |request| {
+					let span = tracing::info_span!("request", trace_id = tracing::field::Empty);
+					let _entered = span.enter();
 					let request_start = middleware.on_request(remote_addr, request.headers());
 
 					let methods = methods.clone();
@@ -447,6 +449,8 @@ impl<M: Middleware> Server<M> {
 					let resources = resources.clone();
 					let middleware = middleware.clone();
 					let health_api = health_api.clone();
+
+					drop(_entered);
 
 					// Run some validation on the http request, then read the body and try to deserialize it into one of
 					// two cases: a single RPC request or a batch of RPC requests.
@@ -546,6 +550,7 @@ impl<M: Middleware> Server<M> {
 							_ => Ok(response::method_not_allowed()),
 						}
 					}
+					.instrument(span)
 				}))
 			}
 		});
