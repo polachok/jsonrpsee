@@ -156,7 +156,14 @@ impl MethodSink {
 pub fn prepare_error(data: &[u8]) -> (Id<'_>, ErrorCode) {
 	match serde_json::from_slice::<InvalidRequest>(data) {
 		Ok(InvalidRequest { id }) => (id, ErrorCode::InvalidRequest),
-		Err(_) => (Id::Null, ErrorCode::ParseError),
+		Err(_) => {
+			let error = match serde_json::from_slice::<serde::de::IgnoredAny>(data) {
+				Ok(_) => ErrorCode::InvalidRequest,
+				Err(_) => ErrorCode::ParseError,
+			};
+
+			(Id::Null, error)
+		}
 	}
 }
 
