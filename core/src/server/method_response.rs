@@ -157,50 +157,52 @@ impl MethodResponse {
 
 		let kind = ResponseKind::MethodCall;
 
-		match serde_json::to_writer(&mut writer, &Response::new(rp.inner, id.clone())) {
-			Ok(_) => {
-				// Safety - serde_json does not emit invalid UTF-8.
-				let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
+		tokio::task::block_in_place(|| {
+			match serde_json::to_writer(&mut writer, &Response::new(rp.inner, id.clone())) {
+				Ok(_) => {
+					// Safety - serde_json does not emit invalid UTF-8.
+					let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
 
-				Self { result, success_or_error, kind, on_close: rp.on_exit, extensions: Extensions::new() }
-			}
-			Err(err) => {
-				tracing::error!(target: LOG_TARGET, "Error serializing response: {:?}", err);
+					Self { result, success_or_error, kind, on_close: rp.on_exit, extensions: Extensions::new() }
+				}
+				Err(err) => {
+					tracing::error!(target: LOG_TARGET, "Error serializing response: {:?}", err);
 
-				if err.is_io() {
-					let data = to_raw_value(&format!("Exceeded max limit of {max_response_size}")).ok();
-					let err_code = OVERSIZED_RESPONSE_CODE;
+					if err.is_io() {
+						let data = to_raw_value(&format!("Exceeded max limit of {max_response_size}")).ok();
+						let err_code = OVERSIZED_RESPONSE_CODE;
 
-					let err = InnerResponsePayload::<()>::error_borrowed(ErrorObject::borrowed(
-						err_code,
-						OVERSIZED_RESPONSE_MSG,
-						data.as_deref(),
-					));
-					let result =
-						serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
+						let err = InnerResponsePayload::<()>::error_borrowed(ErrorObject::borrowed(
+							err_code,
+							OVERSIZED_RESPONSE_MSG,
+							data.as_deref(),
+						));
+						let result =
+							serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
-					Self {
-						result,
-						success_or_error: MethodResponseResult::Failed(err_code),
-						kind,
-						on_close: rp.on_exit,
-						extensions: Extensions::new(),
-					}
-				} else {
-					let err = ErrorCode::InternalError;
-					let payload = jsonrpsee_types::ResponsePayload::<()>::error(err);
-					let result =
-						serde_json::to_string(&Response::new(payload, id)).expect("JSON serialization infallible; qed");
-					Self {
-						result,
-						success_or_error: MethodResponseResult::Failed(err.code()),
-						kind,
-						on_close: rp.on_exit,
-						extensions: Extensions::new(),
+						Self {
+							result,
+							success_or_error: MethodResponseResult::Failed(err_code),
+							kind,
+							on_close: rp.on_exit,
+							extensions: Extensions::new(),
+						}
+					} else {
+						let err = ErrorCode::InternalError;
+						let payload = jsonrpsee_types::ResponsePayload::<()>::error(err);
+						let result = serde_json::to_string(&Response::new(payload, id))
+							.expect("JSON serialization infallible; qed");
+						Self {
+							result,
+							success_or_error: MethodResponseResult::Failed(err.code()),
+							kind,
+							on_close: rp.on_exit,
+							extensions: Extensions::new(),
+						}
 					}
 				}
 			}
-		}
+		})
 	}
 
 	/// This is similar to [`MethodResponse::error`] but sets a flag to indicate
