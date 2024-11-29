@@ -157,7 +157,7 @@ impl MethodResponse {
 
 		let kind = ResponseKind::MethodCall;
 
-		tokio::task::block_in_place(|| {
+		let write = || {
 			match serde_json::to_writer(&mut writer, &Response::new(rp.inner, id.clone())) {
 				Ok(_) => {
 					// Safety - serde_json does not emit invalid UTF-8.
@@ -202,7 +202,13 @@ impl MethodResponse {
 					}
 				}
 			}
-		})
+		};
+		// we expect error to be small
+		if success_or_error.is_error() {
+			write()
+		} else {
+			tokio::task::block_in_place(write)
+		}
 	}
 
 	/// This is similar to [`MethodResponse::error`] but sets a flag to indicate
