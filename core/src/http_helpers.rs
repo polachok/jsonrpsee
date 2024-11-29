@@ -26,7 +26,7 @@
 
 //! Shared HTTP utilities.
 
-use crate::BoxError;
+use crate::{server::ResponseResult, BoxError};
 use bytes::{Buf, Bytes};
 use http_body::Frame;
 use http_body_util::{BodyExt, Limited};
@@ -34,6 +34,7 @@ use std::{
 	pin::Pin,
 	task::{Context, Poll},
 };
+use tokio_stream::wrappers::ReceiverStream;
 
 /// HTTP request type.
 pub type Request<T = Body> = http::Request<T>;
@@ -79,6 +80,20 @@ impl From<Vec<u8>> for Body {
 	fn from(bytes: Vec<u8>) -> Self {
 		let body = http_body_util::Full::from(bytes);
 		Self::new(body)
+	}
+}
+
+impl From<ResponseResult> for Body {
+	fn from(response: ResponseResult) -> Self {
+		use tokio_stream::StreamExt;
+		match response {
+			ResponseResult::Full(body) => Self::from(body),
+			ResponseResult::Stream(stream) => {
+				let receiver = ReceiverStream::new(stream).map(Frame::data).map(Ok::<_, std::io::Error>);
+				let body = http_body_util::StreamBody::new(receiver);
+				Self::new(body)
+			}
+		}
 	}
 }
 

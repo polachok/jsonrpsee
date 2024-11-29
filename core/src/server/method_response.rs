@@ -24,7 +24,7 @@
 // IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-use crate::server::{BoundedWriter, LOG_TARGET};
+use crate::server::{BoundedWriter, StreamingBoundedWriter, LOG_TARGET};
 use std::task::Poll;
 
 use futures_util::{Future, FutureExt};
@@ -43,6 +43,37 @@ enum ResponseKind {
 	Batch,
 }
 
+/// potentially streaming response
+#[derive(Debug)]
+pub enum ResponseResult {
+	/// stream
+	Stream(tokio::sync::mpsc::Receiver<bytes::Bytes>),
+	/// not stream
+	Full(String),
+}
+
+impl Default for ResponseResult {
+	fn default() -> Self {
+		Self::Full(String::new())
+	}
+}
+
+impl ResponseResult {
+	/// bla bla
+	pub async fn collect(self) -> String {
+		match self {
+			ResponseResult::Full(s) => s,
+			ResponseResult::Stream(mut rx) => {
+				let mut buf = Vec::new();
+				while let Some(chunk) = rx.recv().await {
+					buf.extend_from_slice(&chunk);
+				}
+				unsafe { String::from_utf8_unchecked(buf) }
+			}
+		}
+	}
+}
+
 /// Represents a response to a method call.
 ///
 /// NOTE: A subscription is also a method call but it's
@@ -52,7 +83,7 @@ enum ResponseKind {
 #[derive(Debug)]
 pub struct MethodResponse {
 	/// Serialized JSON-RPC response,
-	result: String,
+	result: ResponseResult,
 	/// Indicates whether the call was successful or not.
 	success_or_error: MethodResponseResult,
 	/// Indicates whether the call was a subscription response.
@@ -91,17 +122,20 @@ impl MethodResponse {
 	}
 
 	/// Consume the method response and extract the serialized response.
-	pub fn into_result(self) -> String {
+	pub fn into_result(self) -> ResponseResult {
 		self.result
 	}
 
 	/// Extract the serialized response as a String.
-	pub fn to_result(&self) -> String {
-		self.result.clone()
+	pub fn to_string_result(&self) -> String {
+		match &self.result {
+			ResponseResult::Full(s) => s.clone(),
+			ResponseResult::Stream(_) => todo!(),
+		}
 	}
 
 	/// Consume the method response and extract the parts.
-	pub fn into_parts(self) -> (String, Option<MethodResponseNotifyTx>) {
+	pub fn into_parts(self) -> (ResponseResult, Option<MethodResponseNotifyTx>) {
 		(self.result, self.on_close)
 	}
 
@@ -113,14 +147,14 @@ impl MethodResponse {
 	}
 
 	/// Get a reference to the serialized response.
-	pub fn as_result(&self) -> &str {
+	pub fn as_result(&self) -> &ResponseResult {
 		&self.result
 	}
 
 	/// Create a method response from [`BatchResponse`].
 	pub fn from_batch(batch: BatchResponse) -> Self {
 		Self {
-			result: batch.0,
+			result: ResponseResult::Full(batch.0),
 			success_or_error: MethodResponseResult::Success,
 			kind: ResponseKind::Batch,
 			on_close: None,
@@ -147,7 +181,7 @@ impl MethodResponse {
 	where
 		T: Serialize + Clone,
 	{
-		let mut writer = BoundedWriter::new(max_response_size);
+		let (mut writer, rx) = StreamingBoundedWriter::new(max_response_size);
 
 		let success_or_error = if let InnerResponsePayload::Error(ref e) = rp.inner {
 			MethodResponseResult::Failed(e.code())
@@ -161,7 +195,8 @@ impl MethodResponse {
 			match serde_json::to_writer(&mut writer, &Response::new(rp.inner, id.clone())) {
 				Ok(_) => {
 					// Safety - serde_json does not emit invalid UTF-8.
-					let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
+					// let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
+					let result = ResponseResult::Stream(rx);
 
 					Self { result, success_or_error, kind, on_close: rp.on_exit, extensions: Extensions::new() }
 				}
@@ -181,7 +216,7 @@ impl MethodResponse {
 							serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 
 						Self {
-							result,
+							result: ResponseResult::Full(result),
 							success_or_error: MethodResponseResult::Failed(err_code),
 							kind,
 							on_close: rp.on_exit,
@@ -193,7 +228,7 @@ impl MethodResponse {
 						let result = serde_json::to_string(&Response::new(payload, id))
 							.expect("JSON serialization infallible; qed");
 						Self {
-							result,
+							result: ResponseResult::Full(result),
 							success_or_error: MethodResponseResult::Failed(err.code()),
 							kind,
 							on_close: rp.on_exit,
@@ -226,7 +261,7 @@ impl MethodResponse {
 		let err = InnerResponsePayload::<()>::error_borrowed(err);
 		let result = serde_json::to_string(&Response::new(err, id)).expect("JSON serialization infallible; qed");
 		Self {
-			result,
+			result: ResponseResult::Full(result),
 			success_or_error: MethodResponseResult::Failed(err_code),
 			kind: ResponseKind::MethodCall,
 			on_close: None,
@@ -306,12 +341,13 @@ impl BatchResponseBuilder {
 	pub fn append(&mut self, response: &MethodResponse) -> Result<(), MethodResponse> {
 		// `,` will occupy one extra byte for each entry
 		// on the last item the `,` is replaced by `]`.
-		let len = response.result.len() + self.result.len() + 1;
+		let result = response.to_string_result();
+		let len = result.len() + self.result.len() + 1;
 
 		if len > self.max_response_size {
 			Err(MethodResponse::error(Id::Null, reject_too_big_batch_response(self.max_response_size)))
 		} else {
-			self.result.push_str(&response.result);
+			self.result.push_str(&result);
 			self.result.push(',');
 			Ok(())
 		}

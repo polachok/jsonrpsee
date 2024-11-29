@@ -172,7 +172,7 @@ where
 					let (serialized_rp, mut on_close) = rp.into_parts();
 
 					// The connection is closed, just quit.
-					if sink.send(serialized_rp).await.is_err() {
+					if sink.send(serialized_rp.collect().await).await.is_err() {
 						return;
 					}
 

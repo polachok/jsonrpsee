@@ -405,6 +405,7 @@ impl Methods {
 			n.notify(is_success);
 		}
 
+		let rp = rp.collect().await;
 		tracing::trace!(target: LOG_TARGET, "[Methods::inner_call] Method: {}, response: {}", method, rp);
 
 		(rp, rx)

@@ -27,6 +27,7 @@
 use std::io;
 use std::time::Duration;
 
+use bytes::{Bytes, BytesMut};
 use jsonrpsee_types::{ErrorCode, ErrorObject, Id, InvalidRequest, Response, ResponsePayload};
 use tokio::sync::mpsc;
 
@@ -73,6 +74,52 @@ impl<'a> io::Write for &'a mut BoundedWriter {
 	}
 
 	fn flush(&mut self) -> io::Result<()> {
+		Ok(())
+	}
+}
+
+/// Bounded writer that allows writing at most `max_len` bytes.
+#[derive(Debug)]
+pub struct StreamingBoundedWriter {
+	max_len: usize,
+	cur_len: usize,
+	buf: BytesMut,
+	tx: mpsc::Sender<Bytes>,
+}
+
+impl StreamingBoundedWriter {
+	/// Create a new bounded writer.
+	pub fn new(max_len: usize) -> (Self, tokio::sync::mpsc::Receiver<Bytes>) {
+		let (tx, rx) = tokio::sync::mpsc::channel(32);
+		(Self { cur_len: 0, max_len, buf: BytesMut::with_capacity(128), tx }, rx)
+	}
+}
+
+impl<'a> io::Write for &'a mut StreamingBoundedWriter {
+	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+		let len = self.cur_len + buf.len();
+		if self.max_len >= len {
+			self.buf.extend_from_slice(buf);
+			if self.buf.len() > 1024 {
+				let chunk = self.buf.split_to(1024).freeze();
+				self.tx
+					.blocking_send(chunk)
+					.map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to send chunk to receiver"))?;
+			}
+			self.cur_len += buf.len();
+			Ok(buf.len())
+		} else {
+			Err(io::Error::new(io::ErrorKind::OutOfMemory, "Memory capacity exceeded"))
+		}
+	}
+
+	fn flush(&mut self) -> io::Result<()> {
+		let buf = std::mem::replace(&mut self.buf, BytesMut::with_capacity(128));
+		if !buf.is_empty() {
+			self.tx
+				.blocking_send(buf.freeze())
+				.map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to send chunk to receiver"))?;
+		}
 		Ok(())
 	}
 }
