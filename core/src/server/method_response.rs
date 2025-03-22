@@ -158,7 +158,7 @@ impl MethodResponse {
 		let kind = ResponseKind::MethodCall;
 
 		let write = || {
-			match serde_json::to_writer(&mut writer, &Response::new(rp.inner, id.clone())) {
+			match simd_json::to_writer(&mut writer, &Response::new(rp.inner, id.clone())) {
 				Ok(_) => {
 					// Safety - serde_json does not emit invalid UTF-8.
 					let result = unsafe { String::from_utf8_unchecked(writer.into_bytes()) };
