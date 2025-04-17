@@ -139,6 +139,16 @@ impl MethodResponse {
 		rp
 	}
 
+	/// Create a new method response from String.
+	pub fn ready(id: Id, result: String, error: Option<i32>) -> Self {
+		let kind = ResponseKind::MethodCall;
+		let success_or_error = match error {
+			Some(e) => MethodResponseResult::Failed(e),
+			None => MethodResponseResult::Success,
+		};
+		Self { result, success_or_error, kind, on_close: None, extensions: Extensions::new() }
+	}
+
 	/// Create a new method response.
 	///
 	/// If the serialization of `result` exceeds `max_response_size` then
