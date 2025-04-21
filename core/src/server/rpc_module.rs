@@ -619,7 +619,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 		callback: Fun,
 	) -> Result<&mut MethodCallback, RegisterMethodError>
 	where
-		R: IntoResponse + 'static,
+		R: IntoResponse + 'static + Send,
 		Fut: Future<Output = R> + Send,
 		Fun: (Fn(Params<'static>, Arc<Context>, Extensions) -> Fut) + Clone + Send + Sync + 'static,
 	{
@@ -633,8 +633,17 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				// NOTE: the extensions can't be mutated at this point so
 				// it's safe to clone it.
 				let future = async move {
-					let rp = callback(params, ctx, extensions.clone()).await.into_response();
-					MethodResponse::response(id, rp, max_response_size).with_extensions(extensions)
+					let rp = callback(params, ctx, extensions.clone()).await;
+					let (tx, rx) = oneshot::channel();
+					tokio::task::spawn_blocking(move || {
+						let rp = rp.into_response();
+						if let Err(err) =
+							tx.send(MethodResponse::response(id, rp, max_response_size).with_extensions(extensions))
+						{
+							tracing::error!(target: LOG_TARGET, "Failed to send response to RPC method: {:?}", err);
+						}
+					});
+					rx.await.unwrap()
 				};
 				future.boxed()
 			})),
