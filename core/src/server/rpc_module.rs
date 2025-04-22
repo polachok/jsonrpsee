@@ -635,7 +635,7 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				let future = async move {
 					let rp = callback(params, ctx, extensions.clone()).await;
 					let (tx, rx) = oneshot::channel();
-					tokio::task::spawn_blocking(move || {
+					rayon::spawn(move || {
 						let rp = rp.into_response();
 						if let Err(err) =
 							tx.send(MethodResponse::response(id, rp, max_response_size).with_extensions(extensions))
