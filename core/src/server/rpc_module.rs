@@ -634,7 +634,13 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 				// it's safe to clone it.
 				let future = async move {
 					let rp = callback(params, ctx, extensions.clone()).await.into_response();
-					MethodResponse::response(id, rp, max_response_size).with_extensions(extensions)
+					let mut extensions = extensions;
+					let start = std::time::Instant::now();
+					let rp = MethodResponse::response(id, rp, max_response_size);
+					let elapsed = start.elapsed().as_millis() as u64;
+					let time = crate::SerializationTime(elapsed);
+					extensions.insert(time);
+					rp.with_extensions(extensions)
 				};
 				future.boxed()
 			})),

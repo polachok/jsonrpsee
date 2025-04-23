@@ -102,3 +102,14 @@ pub type SubscriptionResult = Result<(), StringError>;
 
 /// Type erased error.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+/// Serialization time metric
+#[derive(Copy, Clone, Debug)]
+pub struct SerializationTime(u64);
+
+impl SerializationTime {
+	/// return number of milliseconds
+	pub fn as_millis(self) -> u64 {
+		self.0
+	}
+}
