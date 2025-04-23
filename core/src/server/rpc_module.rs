@@ -636,10 +636,15 @@ impl<Context: Send + Sync + 'static> RpcModule<Context> {
 					let rp = callback(params, ctx, extensions.clone()).await;
 					let (tx, rx) = oneshot::channel();
 					rayon::spawn(move || {
+						let mut extensions = extensions;
 						let rp = rp.into_response();
-						if let Err(err) =
-							tx.send(MethodResponse::response(id, rp, max_response_size).with_extensions(extensions))
-						{
+						let start = std::time::Instant::now();
+						let rp = MethodResponse::response(id, rp, max_response_size);
+						let elapsed = start.elapsed().as_millis() as u64;
+						let time = crate::SerializationTime(elapsed);
+						extensions.insert(time);
+						let rp = rp.with_extensions(extensions);
+						if let Err(err) = tx.send(rp) {
 							tracing::error!(target: LOG_TARGET, "Failed to send response to RPC method: {:?}", err);
 						}
 					});
